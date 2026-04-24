@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from transformers import PreTrainedTokenizer
 
-from .recorder import NeuronRecorder
+from oaas.recorder import NeuronRecorder
 
 
 def compute_oa_scores(
