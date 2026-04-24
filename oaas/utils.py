@@ -1,7 +1,8 @@
 import torch
+from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, AutoModelForCausalLM
 from datasets import Dataset
 
 
@@ -80,3 +81,27 @@ def prepare_dataloader(
         num_workers=num_workers
     )
     return dataloader
+
+
+def apply_pruning_masks(
+    model: nn.Module,
+    masks: dict[str, torch.Tensor],
+):
+    for name, module in model.named_modules():
+        if name in masks:
+            w = module.weight.data
+            m = masks[name].to(w.device, w.dtype)
+            module.weight.data = w * m
+
+
+def load_model_and_apply_masks(
+    model_path: str,
+    masks: dict[str, torch.Tensor],
+    **model_init_kwargs
+) -> nn.Module:
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        **model_init_kwargs
+    )
+    apply_pruning_masks(model, masks)
+    return model

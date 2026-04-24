@@ -7,6 +7,7 @@ from transformers import PreTrainedTokenizer
 from oaas.overactivity import compute_oa_scores
 from oaas.saliency import OAASaliency
 from oaas.utils import prepare_dataloader
+from oaas.utils import apply_pruning_masks
 
 
 def cross_entropy_loss(model: nn.Module, batch: dict) -> torch.Tensor:
@@ -52,7 +53,7 @@ def prune(
     pruning_ratio: float,
     eps: float = 1e-6,
     **kwargs
-) -> nn.Module:
+) -> tuple[nn.Module, dict[str, torch.Tensor]]:
     num_workers = (
         kwargs.pop("num_workers")
         if "num_workers" in kwargs else 0
@@ -85,11 +86,6 @@ def prune(
     )
     
     masks = get_pruning_masks(sal_scores, pruning_ratio)
+    apply_pruning_masks(model, masks)
     
-    for name, module in model.named_modules():
-        if name in target_modules:
-            w = module.weight.data
-            m = masks[name].to(w.device, w.dtype)
-            module.weight.data = w * m
-    
-    return model
+    return model, masks
