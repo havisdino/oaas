@@ -61,11 +61,7 @@ def main(
         device_map="auto"
     )
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-    target_modules = [
-        f"model.layers.{i}.mlp.down_proj"
-        for i in range(model.config.num_hidden_layers)
-    ]
+    tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
 
     datasets = {
         "hallu": load_dataset("json", split="train", data_files=hallu_data),
