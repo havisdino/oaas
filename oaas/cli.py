@@ -39,6 +39,12 @@ def get_next_version_dir(root_dir, prefix="v"):
 @click.option("--max_length", type=int, default=4096)
 @click.option("--oa_weight", type=float, default=1e-2)
 @click.option("--pruning_ratio", type=float, default=0.1)
+@click.option(
+    "--saliency_method",
+    type=click.Choice(["first_order", "second_order"]),
+    default="second_order",
+    show_default=True,
+)
 @click.option("--apply_chat_template", is_flag=True)
 @click.option("--save_masks_only", is_flag=True)
 def main(
@@ -51,6 +57,7 @@ def main(
     max_length,
     oa_weight,
     pruning_ratio,
+    saliency_method,
     apply_chat_template,
     save_masks_only
 ):
@@ -73,6 +80,7 @@ def main(
         max_length=max_length,
         oa_weight=oa_weight,
         pruning_ratio=pruning_ratio,
+        saliency_method=saliency_method,
         apply_chat_template=apply_chat_template
     )
 

@@ -51,6 +51,7 @@ def prune(
     max_length: int,
     oa_weight: float,
     pruning_ratio: float,
+    saliency_method: Literal["first_order", "second_order"] = "second_order",
     eps: float = 1e-6,
     **kwargs
 ) -> tuple[nn.Module, dict[str, torch.Tensor]]:
@@ -70,7 +71,7 @@ def prune(
         **kwargs
     )
     
-    saliency = OAASaliency(model, oa_scores, oa_weight)
+    saliency = OAASaliency(model, oa_scores, oa_weight, saliency_method)
     dataloader = prepare_dataloader(
         datasets["truth"],
         tokenizer,

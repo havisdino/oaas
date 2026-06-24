@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Literal
 
 import torch
 import torch.nn as nn
@@ -13,12 +13,20 @@ class OAASaliency:
         self,
         model: nn.Module,
         oa_scores: dict[str, torch.Tensor],
-        oa_weight: float
+        oa_weight: float,
+        saliency_method: Literal["first_order", "second_order"] = "second_order"
     ):
+        if saliency_method not in {"first_order", "second_order"}:
+            raise ValueError(
+                "saliency_method must be either 'first_order' or 'second_order', "
+                f"got {saliency_method}"
+            )
+
         self.model = model
         self.target_modules = set(oa_scores.keys())
         self.oa_scores = oa_scores
         self.oa_weight = oa_weight
+        self.saliency_method = saliency_method
         
         self._hooks = []
         self._activations = {}
@@ -40,6 +48,20 @@ class OAASaliency:
         for h in self._hooks:
             h.remove()
         self._hooks.clear()
+
+    def _activation_mask_saliency(self, act: torch.Tensor) -> torch.Tensor:
+        first_order_sal = act.detach().float() * act.grad.detach().float()
+
+        if self.saliency_method == "first_order":
+            saliency = first_order_sal
+        else:
+            # Diagonal empirical Fisher/Gauss-Newton estimate for an activation
+            # mask parameter. This is the practical second-order OBD analogue:
+            # Delta L_i ~= 1/2 * H_ii with H_ii ~= E[(dL / dm_i)^2],
+            # and dL / dm_i = activation_i * dL / d activation_i.
+            saliency = 0.5 * first_order_sal.square()
+
+        return saliency.reshape(-1, saliency.shape[-1]).mean(dim=0).cpu()
     
     def compute(
         self,
@@ -55,20 +77,15 @@ class OAASaliency:
         try:
             for batch in tqdm(dataloader, desc="Computing saliency scores"):
                 self.model.zero_grad()
+                self._activations.clear()
 
                 loss = loss_fn(self.model, batch)
                 loss.backward()
 
                 for name, act in self._activations.items():
-                    first_order_sal = (act.detach() * act.grad.detach())
-                    first_order_sal = (
-                        first_order_sal
-                        .reshape(-1, first_order_sal.shape[-1])
-                        .mean(dim=0)
-                        .cpu()
-                    )
+                    saliency = self._activation_mask_saliency(act)
 
-                    accumulated[name] = accumulated[name] + first_order_sal
+                    accumulated[name] = accumulated[name] + saliency
                     counts[name] += 1
 
         finally:
