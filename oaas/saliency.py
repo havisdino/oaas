@@ -55,10 +55,6 @@ class OAASaliency:
         if self.saliency_method == "first_order":
             saliency = first_order_sal
         else:
-            # Diagonal empirical Fisher/Gauss-Newton estimate for an activation
-            # mask parameter. This is the practical second-order OBD analogue:
-            # Delta L_i ~= 1/2 * H_ii with H_ii ~= E[(dL / dm_i)^2],
-            # and dL / dm_i = activation_i * dL / d activation_i.
             saliency = 0.5 * first_order_sal.square()
 
         return saliency.reshape(-1, saliency.shape[-1]).mean(dim=0).cpu()
@@ -90,12 +86,14 @@ class OAASaliency:
 
         finally:
             self._remove_hooks()
-
-        scores = {
-            name: (
-                accumulated[name] / counts[name] - 
-                self.oa_weight * self.oa_scores[name].cpu()
+        
+        scores = {}
+        
+        for name in accumulated:
+            oa_score = self.oa_scores[name].cpu()
+            scores[name] = (
+                accumulated[name] / counts[name]
+                + 0.5 * oa_score * (oa_score - 2)
             )
-            for name in accumulated
-        }
+        
         return scores
