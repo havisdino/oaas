@@ -91,9 +91,7 @@ class OAASaliency:
         
         for name in accumulated:
             oa_score = self.oa_scores[name].cpu()
-            scores[name] = (
-                accumulated[name] / counts[name]
-                + 0.5 * oa_score * (oa_score - 2)
-            )
+            w_oa = torch.relu(oa_score) * self.oa_weight
+            scores[name] = accumulated[name] / counts[name] - w_oa
         
         return scores

@@ -61,10 +61,10 @@ def prepare_dataloader(
         input_ids = prompt_ids + response_ids
         input_ids = input_ids[:max_length]
         
-        seqlen = len(prompt_ids) + len(response_ids)
-        attention_mask = [1 for _ in range(seqlen)]
+        attention_mask = [1 for _ in input_ids]
         
         labels = [ignore_index for _ in prompt_ids] + response_ids
+        labels = labels[:max_length]
         
         return {
             "input_ids": input_ids,
