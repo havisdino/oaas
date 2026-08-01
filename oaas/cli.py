@@ -2,7 +2,9 @@ import os
 from pathlib import Path
 
 import torch
+import transformers
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer
 )
@@ -45,6 +47,12 @@ def get_next_version_dir(root_dir, prefix="v"):
     default="second_order",
     show_default=True,
 )
+@click.option(
+    "--ranking_scope",
+    type=click.Choice(["global", "layerwise"]),
+    default="global",
+    show_default=True,
+)
 @click.option("--apply_chat_template", is_flag=True)
 @click.option("--save_masks_only", is_flag=True)
 def main(
@@ -58,10 +66,13 @@ def main(
     oa_weight,
     pruning_ratio,
     saliency_method,
+    ranking_scope,
     apply_chat_template,
     save_masks_only
 ):
-    model = AutoModelForCausalLM.from_pretrained(
+    config = AutoConfig.from_pretrained(model_path)
+    model_class = getattr(transformers, config.architectures[0])
+    model = model_class.from_pretrained(
         model_path,
         dtype="bfloat16",
         attn_implementation="sdpa",
@@ -81,6 +92,7 @@ def main(
         oa_weight=oa_weight,
         pruning_ratio=pruning_ratio,
         saliency_method=saliency_method,
+        ranking_scope=ranking_scope,
         apply_chat_template=apply_chat_template
     )
 

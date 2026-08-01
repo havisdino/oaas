@@ -14,30 +14,43 @@ def cross_entropy_loss(model: nn.Module, batch: dict) -> torch.Tensor:
     return model(**batch).loss
 
 
-def hallucination_surplus_loss(model: nn.Module, batch: dict) -> torch.Tensor:
-    log_p_pos = -model(**batch["truth"]).loss
-    log_p_neg = -model(**batch["hallu"]).loss
-    return log_p_neg - log_p_pos 
-
-
 def get_pruning_masks(
     saliency_scores: dict[str, torch.Tensor],
     pruning_ratio: float,
+    ranking_scope: Literal["global", "layerwise"] = "global",
 ) -> dict[str, torch.Tensor]:
     if not (0.0 <= pruning_ratio <= 1.0):
         raise ValueError(
             f"pruning_ratio must be in [0, 1], got {pruning_ratio}"
         )
+    if ranking_scope not in {"global", "layerwise"}:
+        raise ValueError(
+            "ranking_scope must be either 'global' or 'layerwise', "
+            f"got {ranking_scope}"
+        )
+
+    def mask_from_scores(scores: torch.Tensor) -> torch.Tensor:
+        n_prune = int(scores.numel() * pruning_ratio)
+        if n_prune == 0:
+            return torch.ones_like(scores, dtype=torch.float32)
+
+        threshold = torch.kthvalue(scores, k=n_prune).values
+        return (scores > threshold).float()
+
+    if ranking_scope == "layerwise":
+        return {
+            name: mask_from_scores(scores)
+            for name, scores in saliency_scores.items()
+        }
 
     all_scores = torch.cat([s for s in saliency_scores.values()])
-    total_neurons = all_scores.numel()
-    n_prune = int(total_neurons * pruning_ratio)
-
-    threshold = torch.kthvalue(all_scores, k=n_prune).values
+    global_mask = mask_from_scores(all_scores)
 
     masks = {}
+    offset = 0
     for name, scores in saliency_scores.items():
-        masks[name] = (scores > threshold).float()
+        masks[name] = global_mask[offset:offset + scores.numel()].reshape_as(scores)
+        offset += scores.numel()
 
     return masks
 
@@ -52,6 +65,7 @@ def prune(
     oa_weight: float,
     pruning_ratio: float,
     saliency_method: Literal["first_order", "second_order"] = "second_order",
+    ranking_scope: Literal["global", "layerwise"] = "global",
     eps: float = 1e-6,
     **kwargs
 ) -> tuple[nn.Module, dict[str, torch.Tensor]]:
@@ -86,7 +100,7 @@ def prune(
         loss_fn=cross_entropy_loss
     )
     
-    masks = get_pruning_masks(sal_scores, pruning_ratio)
+    masks = get_pruning_masks(sal_scores, pruning_ratio, ranking_scope)
     apply_pruning_masks(model, masks)
     
     return model, masks
